@@ -39,7 +39,7 @@ const Footer: React.FC<FooterProps> = ({ onOpenPrivacy, onOpenSecurity }) => {
             >
               {!logoError ? (
                 <img 
-                  src="img/logo.svg" 
+                  src="/img/logo.svg" 
                   alt="Swarups NXT" 
                   className="h-full w-auto object-contain transition-all duration-500 group-hover:scale-105 dark:brightness-0 dark:invert"
                   onError={() => setLogoError(true)}
