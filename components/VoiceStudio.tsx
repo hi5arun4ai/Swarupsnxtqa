@@ -4,129 +4,219 @@ import { GoogleGenAI, Modality } from "@google/genai";
 const VoiceStudio: React.FC = () => {
   const [industry, setIndustry] = useState('Real Estate');
   const [language, setLanguage] = useState('Indian English');
-  const [voiceVariant, setVoiceVariant] = useState('Female (Pro)');
+  const [gender, setGender] = useState<'male' | 'female'>('female');
+  const [personaKey, setPersonaKey] = useState('enthusiastic');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  
-  // Audio Refs for Real-Time Visualization & Playback
+  const [mode, setMode] = useState<'template' | 'custom'>('template');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [generatedScript, setGeneratedScript] = useState('');
+  const [statusLogs, setStatusLogs] = useState<string[]>([]);
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const visualizerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
   const visualizerDataArrayRef = useRef<Uint8Array | null>(null);
+  const particlesRef = useRef<any[]>([]);
 
-  // Configuration Constants
-  const INDUSTRIES = ['Real Estate', 'Healthcare', 'Banking', 'Finance', 'E-commerce', 'EdTech', 'Travel'];
-  const LANGUAGES = ['Indian English', 'US English', 'Hindi', 'Tamil', 'Telugu'];
-  const VOICES = ['Female (Pro)', 'Female (Calm)', 'Female (Enthusiastic)', 'Male (Assertive)', 'Male (Casual)', 'Male (Neutral)'];
+  const INDUSTRIES = ['Real Estate', 'Healthcare', 'Banking', 'E-commerce', 'EdTech'];
+  const LANGUAGES = ['Indian English', 'US English', 'Hindi', 'Tamil'];
+  
+  const PERSONAS = {
+    enthusiastic: {
+      name: 'Enthusiastic',
+      icon: 'fa-bolt',
+      voices: { female: 'Kore', male: 'Fenrir' },
+      directive: 'Speak with high energy, excitement, and a friendly smile in your voice.',
+      fallbackParams: { pitch: 1.2, rate: 1.1 }
+    },
+    assertive: {
+      name: 'Assertive',
+      icon: 'fa-user-tie',
+      voices: { female: 'Kore', male: 'Fenrir' },
+      directive: 'Speak with authority, confidence, and a professional, commanding tone.',
+      fallbackParams: { pitch: 0.9, rate: 1.0 }
+    },
+    calm: {
+      name: 'Calm & Caring',
+      icon: 'fa-leaf',
+      voices: { female: 'Zephyr', male: 'Puck' },
+      directive: 'Speak softly, slowly, and with deep empathy and reassurance.',
+      fallbackParams: { pitch: 1.0, rate: 0.85 }
+    },
+    neutral: {
+      name: 'Efficiency Pro',
+      icon: 'fa-robot',
+      voices: { female: 'Kore', male: 'Puck' },
+      directive: 'Speak with a neutral, clear, and highly efficient informative tone.',
+      fallbackParams: { pitch: 1.0, rate: 1.0 }
+    }
+  };
 
-  // Script Database
   const SCRIPTS: Record<string, Record<string, string>> = {
     'Real Estate': {
       'Indian English': "Hi there! I'm calling from Luxury Homes regarding your inquiry about the downtown penthouse. Is now a good time to discuss the amenities?",
-      'US English': "Hello! This is an automated follow-up from Luxury Homes regarding your recent interest in our premium listings. Do you have a moment?",
-      'Hindi': "नमस्ते! मैं लक्ज़री होम्स से बोल रही हूँ। आपने हमारे नए प्रोजेक्ट के बारे में पूछताछ की थी। क्या हम अभी सुविधाओं पर चर्चा कर सकते हैं?",
-      'Tamil': "வணக்கம்! நான் லக்சுரி ஹோம்ஸிலிருந்து பேசுகிறேன். எங்கள் புதிய வீடுகள் பற்றி நீங்கள் விசாரித்தீர்கள். இப்போது பேசலாமா?",
-      'Telugu': "నమస్కారం! నేను లగ్జరీ హోమ్స్ నుండి మాట్లాడుతున్నాను. మీరు డౌన్‌టౌన్ పెంట్‌హౌస్ గురించి ఆరా తీశారు. ఇప్పుడు సౌకర్యాల గురించి చర్చించవచ్చా?"
-    },
-    'Healthcare': {
-      'Indian English': "Hello, this is Dr. Sharma's clinic. I'm calling to confirm your appointment for tomorrow at 10 AM. Would you like me to send the location?",
-      'US English': "Hi, calling from City Health. Just a reminder for your check-up scheduled for tomorrow. Please press 1 to confirm.",
-      'Hindi': "नमस्ते, यह डॉ. शर्मा का क्लिनिक है। मैं कल सुबह 10 बजे के लिए आपकी अपॉइंटमेंट कन्फर्म करने के लिए कॉल कर रही हूँ।",
-      'Tamil': "வணக்கம், இது டாக்டர் ஷர்மாவின் கிளினிக். நாளை காலை 10 மணிக்கு உங்கள் அப்பாயிண்ட்மென்ட்டை உறுதிப்படுத்த அழைக்கிறேன்.",
-      'Telugu': "నమస్కారం, ఇది డాక్టర్ శర్మ క్లినిక్. రేపు ఉదయం 10 గంటలకు మీ అపాయింట్‌మెంట్‌ని నిర్ధారించడానికి కాల్ చేస్తున్నాను."
-    },
-    'Banking': {
-      'Indian English': "Greetings from Axis Bank. We noticed a transaction of 50,000 rupees on your card. Was this you? Say yes or no.",
-      'US English': "Hello, this is a security alert from your bank. We detected unusual activity on your debit card. Please verify your identity.",
-      'Hindi': "नमस्कार, मैं आपके बैंक से बोल रहा हूँ। आपके कार्ड पर एक बड़ा लेनदेन हुआ है। क्या यह आपने किया है?",
-      'Tamil': "வணக்கம், உங்கள் வங்கிக் கணக்கில் ஒரு புதிய பரிவர்த்தனை நடந்துள்ளது. இது நீங்கள் செய்ததுதானா?",
-      'Telugu': "యాక్సిస్ బ్యాంక్ నుండి శుభాకాంక్షలు. మీ కార్డ్‌లో 50,000 రూపాయల లావాదేవీని మేము గమనించాము. ఇది మీరేనా?"
-    },
-    'Finance': {
-      'Indian English': "Good afternoon. Your mutual fund portfolio has grown by 12% this year. Would you like to review new investment options?",
-      'US English': "Hello, this is your portfolio manager AI. The market is bullish today. Shall we look at some tech stocks?",
-      'Hindi': "नमस्ते। आपके म्यूचुअल फंड पोर्टफोलियो में इस साल 12% की बढ़ोतरी हुई है। क्या आप निवेश के नए विकल्प देखना चाहेंगे?",
-      'Tamil': "வணக்கம். இந்த ஆண்டு உங்கள் மியூச்சுவல் ஃபண்ட் போர்ட்ஃபோலியோ 12% வளர்ந்துள்ளது. புதிய முதலீட்டு விருப்பங்களை மதிப்பாய்வு செய்ய விரும்புகிறீர்களா?",
-      'Telugu': "శుభ మధ్యాహ్నం. ఈ సంవత్సరం మీ మ్యూచువల్ ఫండ్ పోర్ట్‌ఫోలియో 12% పెరిగింది. మీరు కొత్త పెట్టుబడి ఎంపికలను సమీక్షించాలనుకుంటున్నారా?"
-    },
-    'E-commerce': {
-      'Indian English': "Hi! Your order for the wireless headphones is out for delivery. Would you like to leave it at the security gate?",
-      'US English': "Hey! Just updating you that your package is arriving by 2 PM. Reply STOP to unsubscribe.",
-      'Hindi': "नमस्ते! आपके वायरलेस हेडफोन की डिलीवरी आज होने वाली है। क्या हम इसे सिक्योरिटी गेट पर छोड़ दें?",
-      'Tamil': "வணக்கம்! உங்கள் வயர்லெஸ் ஹெட்ஃபோன்கள் டெலிவரிக்கு வந்துள்ளன. அதை செக்யூரிட்டி கேட்டில் கொடுக்கலாமா?",
-      'Telugu': "హాయ్! వైర్‌లెస్ హెడ్‌ఫోన్‌ల కోసం మీ ఆర్డర్ డెలివరీ కోసం బయలుదేరింది. మేము దానిని సెక్యూరిటీ గేట్ వద్ద ఉంచాలనుకుంటున్నారా?"
-    },
-    'EdTech': {
-      'Indian English': "Hi! We saw you started the Python course but didn't finish. We have a 20% discount if you restart today.",
-      'US English': "Hey there! Noticed you paused your learning journey. Come back today and unlock a special scholarship.",
-      'Hindi': "नमस्ते! हमने देखा कि आपने पायथन कोर्स शुरू किया था। अगर आप आज फिर से शुरू करते हैं तो विशेष छूट मिलेगी।",
-      'Tamil': "வணக்கம்! நீங்கள் பைதான் படிப்பை பாதியில் நிறுத்திவிட்டீர்கள். இன்று மீண்டும் தொடங்கினால் சிறப்பு சலுகை உண்டு.",
-      'Telugu': "హాయ్! మీరు పైథాన్ కోర్సును ప్రారంభించారు కానీ పూర్తి చేయలేదు. మీరు ఈరోజు పునఃప్రారంభించినట్లయితే మా వద్ద 20% తగ్గింపు ఉంది."
-    },
-    'Travel': {
-      'Indian English': "Good morning! Your flight to Mumbai has been rescheduled to 4 PM. Would you like to confirm this new time?",
-      'US English': "Hello traveler! Your booking confirmation is ready. Check your email for the itinerary details.",
-      'Hindi': "सुप्रभात! आपकी मुंबई की उड़ान का समय बदलकर शाम 4 बजे कर दिया गया है। क्या आप इसे कन्फर्म करना चाहेंगे?",
-      'Tamil': "காலை வணக்கம்! உங்கள் மும்பை விமானம் மாலை 4 மணிக்கு மாற்றப்பட்டுள்ளது. இதை உறுதிப்படுத்த விரும்புகிறீர்களா?",
-      'Telugu': "శుభోదయం! ముంబైకి మీ విమానం సాయంత్రం 4 గంటలకు రీషెడ్యూల్ చేయబడింది. మీరు ఈ కొత్త సమయాన్ని నిర్ధారించాలనుకుంటున్నారా?"
+      'US English': "Hello! This is an automated follow-up from Luxury Homes regarding your recent interest in our premium listings.",
+      'Hindi': "नमस्ते! मैं लक्ज़री होम्स से बोल रही हूँ। आपने हमारे नए प्रोजेक्ट के बारे में पूछताछ की थी।",
+      'Tamil': "வணக்கம்! நான் லக்சுரி ஹோம்ஸிலிருந்து பேசுகிறேன். எங்கள் புதிய வீடுகள் பற்றி நீங்கள் விசாரித்தீர்கள்।"
     }
   };
 
-  const getScript = () => {
-    return SCRIPTS[industry]?.[language] || SCRIPTS['Real Estate']['Indian English'];
+  const getScript = () => SCRIPTS[industry]?.[language] || SCRIPTS['Real Estate']?.[language] || "Hello, I am your neural interface. Connection established.";
+
+  const initParticles = (width: number, height: number) => {
+    const pts = [];
+    const count = 50;
+    for (let i = 0; i < count; i++) {
+      pts.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: (Math.random() - 0.5) * 1.2,
+        size: Math.random() * 1.5 + 0.5,
+        opacity: Math.random() * 0.5 + 0.1
+      });
+    }
+    particlesRef.current = pts;
   };
 
-  // --- AUDIO HELPER FUNCTIONS ---
-  function decode(base64: string) {
-    const binaryString = atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  }
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-  async function decodeAudioData(
-    data: Uint8Array,
-    ctx: AudioContext,
-    sampleRate: number = 24000,
-    numChannels: number = 1
-  ): Promise<AudioBuffer> {
-    // IMPORTANT: clone the buffer because decodeAudioData detaches (empties) the ArrayBuffer it receives.
-    // We need the original data if we fallback or logic changes.
-    const bufferCopy = data.buffer.slice(0);
+    const resize = () => {
+      if (canvas.parentElement) {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+        initParticles(canvas.width, canvas.height);
+      }
+    };
+    resize();
+    window.addEventListener('resize', resize);
 
-    try {
-        // Try native browser decoding (works for MP3, WAV, etc.)
-        return await ctx.decodeAudioData(bufferCopy);
-    } catch (e) {
-        // Fallback for Raw PCM data (Gemini native audio preview often sends raw PCM)
-        // Note: Gemini 2.5 Flash TTS usually sends MP3-like headered audio, but this covers edge cases.
-        // We use data.buffer (the original) here, assuming decodeAudioData failed on the copy.
-        const dataInt16 = new Int16Array(data.buffer);
-        const frameCount = dataInt16.length / numChannels;
-        const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-        for (let channel = 0; channel < numChannels; channel++) {
-          const channelData = buffer.getChannelData(channel);
-          for (let i = 0; i < frameCount; i++) {
-             // Convert Int16 to Float32 [-1.0, 1.0]
-             channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    const draw = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      let audioLevel = 0;
+
+      if (isPlaying && analyserRef.current && visualizerDataArrayRef.current) {
+        analyserRef.current.getByteFrequencyData(visualizerDataArrayRef.current);
+        const sum = visualizerDataArrayRef.current.reduce((a, b) => a + b, 0);
+        audioLevel = sum / (visualizerDataArrayRef.current.length * 1.2);
+      } else if (isBuffering) {
+        audioLevel = 20 + Math.sin(Date.now() / 60) * 10;
+      }
+
+      ctx.lineWidth = 0.5;
+      const pts = particlesRef.current;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i];
+        const speedMultiplier = 1 + (audioLevel / 10);
+        p.x += p.vx * speedMultiplier;
+        p.y += p.vy * speedMultiplier;
+
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (1 + audioLevel / 20), 0, Math.PI * 2);
+        ctx.fillStyle = isDark ? `rgba(34, 211, 238, ${p.opacity})` : `rgba(30, 38, 110, ${p.opacity})`;
+        ctx.fill();
+
+        for (let j = i + 1; j < pts.length; j++) {
+          const p2 = pts[j];
+          const dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+          if (dist < 85) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            const lineOpacity = (1 - dist / 85) * 0.25 * (1 + audioLevel / 10);
+            ctx.strokeStyle = isDark ? `rgba(34, 211, 238, ${lineOpacity})` : `rgba(30, 38, 110, ${lineOpacity})`;
+            ctx.stroke();
           }
         }
-        return buffer;
+      }
+
+      const coreSize = 35 + (audioLevel / 1.2);
+      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreSize * 3);
+      
+      if (isPlaying) {
+        gradient.addColorStop(0, isDark ? 'rgba(34, 211, 238, 0.9)' : 'rgba(43, 182, 198, 0.9)');
+        gradient.addColorStop(0.3, isDark ? 'rgba(34, 211, 238, 0.15)' : 'rgba(43, 182, 198, 0.15)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      } else if (isBuffering) {
+        gradient.addColorStop(0, 'rgba(168, 85, 247, 0.9)');
+        gradient.addColorStop(0.3, 'rgba(168, 85, 247, 0.15)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      } else {
+        gradient.addColorStop(0, isDark ? 'rgba(51, 65, 85, 0.2)' : 'rgba(203, 213, 225, 0.3)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      }
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, coreSize * 3, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      if (isPlaying || isBuffering) {
+        ctx.beginPath();
+        ctx.strokeStyle = isDark ? 'rgba(34, 211, 238, 0.8)' : 'rgba(30, 38, 110, 0.6)';
+        ctx.lineWidth = 2;
+        for (let angle = 0; angle < 360; angle += 2) {
+            const rad = angle * Math.PI / 180;
+            const wave = (audioLevel / 5) * Math.sin(angle * 5 + Date.now() / 50);
+            const x = centerX + (coreSize * 2.5 + wave) * Math.cos(rad);
+            const y = centerY + (coreSize * 2.5 + wave) * Math.sin(rad);
+            if (angle === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+
+      animationRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animationRef.current);
+    };
+  }, [isPlaying, isBuffering]);
+
+  const addLog = (msg: string) => {
+    setStatusLogs(prev => [...prev.slice(-1), `[${new Date().toLocaleTimeString()}] ${msg.toUpperCase()}`]);
+  };
+
+  const decode = (base64: string) => {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+    return bytes;
+  };
+
+  const decodeAudioData = async (data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> => {
+    try { 
+      return await ctx.decodeAudioData(data.buffer.slice(0)); 
+    } catch (e) {
+      const dataInt16 = new Int16Array(data.buffer);
+      const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
+      const channelData = buffer.getChannelData(0);
+      for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+      return buffer;
     }
-  }
+  };
 
   const stopAudio = () => {
     if (sourceRef.current) {
-      try {
-        sourceRef.current.stop();
-      } catch (e) { /* ignore already stopped */ }
-      sourceRef.current.disconnect();
+      try { sourceRef.current.stop(); } catch (e) {}
       sourceRef.current = null;
     }
     window.speechSynthesis.cancel();
@@ -134,425 +224,265 @@ const VoiceStudio: React.FC = () => {
     setIsBuffering(false);
   };
 
-  // --- VISUALIZER LOOP ---
-  useEffect(() => {
-    const animate = () => {
-      if (visualizerRef.current) {
-        const bars = Array.from(visualizerRef.current.children) as HTMLElement[];
-        const isDark = document.documentElement.classList.contains('dark');
-        
-        // --- REAL-TIME DATA MODE ---
-        if (isPlaying && analyserRef.current && visualizerDataArrayRef.current) {
-           analyserRef.current.getByteFrequencyData(visualizerDataArrayRef.current);
-           
-           bars.forEach((bar, i) => {
-             // Map 48 bars to frequency data
-             const dataIndex = Math.floor(i * (visualizerDataArrayRef.current!.length / 80)); 
-             const value = visualizerDataArrayRef.current![dataIndex];
-             
-             let height = (value / 255) * 100;
-             height = Math.max(8, height); // Min height
-             
-             bar.style.height = `${height}%`;
-             bar.style.opacity = `${0.6 + (height / 200)}`;
-             
-             if (isDark) {
-                bar.style.backgroundColor = height > 60 ? '#67e8f9' : '#22d3ee';
-                bar.style.boxShadow = `0 0 ${height/10}px ${height > 60 ? '#67e8f9' : '#22d3ee'}`;
-             } else {
-                bar.style.backgroundColor = height > 60 ? '#2E3A8C' : '#2BB6C6';
-                bar.style.boxShadow = 'none';
-             }
-           });
-
-        } 
-        // --- IDLE / LOADING MODE ---
-        else {
-           const time = Date.now() / 800;
-           bars.forEach((bar, i) => {
-             const wave = Math.sin(time + i * 0.2);
-             let height = 10 + (Math.abs(wave) * 15);
-             if (isBuffering) height = 30 + Math.sin(Date.now() / 100 + i) * 20; 
-
-             bar.style.height = `${height}%`;
-             bar.style.opacity = isBuffering ? '0.8' : '0.3';
-             
-             if (isDark) {
-                bar.style.backgroundColor = isBuffering ? '#fff' : '#475569';
-                bar.style.boxShadow = isBuffering ? '0 0 5px white' : 'none';
-             } else {
-                bar.style.backgroundColor = isBuffering ? '#2E3A8C' : '#cbd5e1';
-                bar.style.boxShadow = 'none';
-             }
-           });
-        }
-      }
-      animationRef.current = requestAnimationFrame(animate);
-    };
-
-    animationRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationRef.current);
-  }, [isPlaying, isBuffering]);
-
-
-  // --- GENAI TTS LOGIC ---
   const speakWithGenAI = async (text: string) => {
-    // 1. Check API Key Existence to avoid console errors
     const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-        speakWithFallback(text);
-        return;
-    }
-
+    const persona = PERSONAS[personaKey as keyof typeof PERSONAS];
+    
+    if (!apiKey) { speakWithFallback(text); return; }
+    
     setIsBuffering(true);
-    
-    // Voice Mapping to Gemini 2.5 Voices
-    let geminiVoiceName = 'Kore'; // Default Female
-    if (voiceVariant.includes('Female (Calm)')) geminiVoiceName = 'Zephyr';
-    if (voiceVariant.includes('Female (Enthusiastic)')) geminiVoiceName = 'Kore'; // Kore handles energy well
-    if (voiceVariant.includes('Male (Assertive)')) geminiVoiceName = 'Fenrir';
-    if (voiceVariant.includes('Male (Casual)')) geminiVoiceName = 'Puck';
-    if (voiceVariant.includes('Male (Neutral)')) geminiVoiceName = 'Charon';
+    addLog(`TUNING ${persona.name.toUpperCase()}...`);
 
-    // Advanced Prompt Engineering for Language & Tone
-    let toneInstruction = "";
-    const baseInstruction = "Speak with a highly natural, human-like quality, incorporating subtle breathing pauses and realistic prosody. Avoid robotic monotonicity.";
-    
-    if (voiceVariant.includes('Female (Pro)')) {
-        toneInstruction = `${baseInstruction} Project a professional, polished, and articulate demeanor. Maintain a steady, confident pace suitable for a corporate environment.`;
-    } else if (voiceVariant.includes('Female (Calm)')) {
-        toneInstruction = `${baseInstruction} Adopt a soft, soothing, and relaxed tone. Speak with a gentle, unhurried cadence, conveying deep empathy and patience.`;
-    } else if (voiceVariant.includes('Female (Enthusiastic)')) {
-        toneInstruction = `${baseInstruction} Speak with high energy, warmth, and genuine excitement. Use dynamic intonation and an upbeat tempo, smiling while speaking.`;
-    } else if (voiceVariant.includes('Male (Assertive)')) {
-        toneInstruction = `${baseInstruction} Use a deep, confident, and authoritative tone. Be firm and decisive, yet polite, commanding respect and attention.`;
-    } else if (voiceVariant.includes('Male (Casual)')) {
-        toneInstruction = `${baseInstruction} Sound friendly, laid-back, and conversational. Use natural inflection as if speaking to a close friend.`;
-    } else if (voiceVariant.includes('Male (Neutral)')) {
-        toneInstruction = `${baseInstruction} Maintain a clear, balanced, and objective tone. Deliver the message with the neutrality and precision of a news anchor.`;
-    }
-
-    const contextPrompt = `
-    Role: Professional Voice Actor
-    Language Target: ${language}
-    Voice Persona: ${voiceVariant}
-    Style Instructions: ${toneInstruction}
-    Task: Read the following text naturally, strictly adhering to the style instructions provided. Do not include any introductory text, just the speech.
-    
-    Text: "${text}"
-    `;
-    
     try {
-      // 2. Initialize API
-      const ai = new GoogleGenAI({ apiKey: apiKey });
+      const ai = new GoogleGenAI({ apiKey });
+      const voiceName = persona.voices[gender];
       
-      // 3. Call API
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: contextPrompt }] }],
+        contents: [{ parts: [{ text: `${persona.directive} Text: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: geminiVoiceName },
-            },
-          },
-        },
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName as any } } }
+        }
       });
-
-      // 4. Extract Audio
+      
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!base64Audio) throw new Error("No audio data received");
-
-      // 5. Decode & Prepare
+      if (!base64Audio) throw new Error("Audio signal lost");
+      
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       const ctx = audioContextRef.current;
-      
-      // Resume context if suspended
       if (ctx.state === 'suspended') await ctx.resume();
-
-      const audioBytes = decode(base64Audio);
-      // Pass the Uint8Array to our safe decode function
-      const audioBuffer = await decodeAudioData(audioBytes, ctx);
-
-      // 6. Connect Real-Time Visualizer
+      
+      const buffer = await decodeAudioData(decode(base64Audio), ctx);
+      
       if (!analyserRef.current) {
         analyserRef.current = ctx.createAnalyser();
-        analyserRef.current.fftSize = 128;
+        analyserRef.current.fftSize = 64;
         visualizerDataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
       }
       
       const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
+      source.buffer = buffer;
       source.connect(analyserRef.current);
       analyserRef.current.connect(ctx.destination);
-      
+      source.onended = () => { setIsPlaying(false); addLog("NEURAL IDLE."); };
       sourceRef.current = source;
-      source.onended = () => {
-         setIsPlaying(false);
-         sourceRef.current = null;
-      };
-
-      // 7. Play
+      
+      addLog("NEURAL ACTIVE.");
       setIsBuffering(false);
       setIsPlaying(true);
       source.start();
-
-    } catch (error) {
-      console.warn("GenAI TTS Failed, falling back to Web Speech API", error);
+    } catch (e) {
       speakWithFallback(text);
     }
   };
 
-  // --- FALLBACK: WEB SPEECH API ---
   const speakWithFallback = (text: string) => {
     setIsBuffering(false);
-    const utterance = new SpeechSynthesisUtterance(text);
+    const persona = PERSONAS[personaKey as keyof typeof PERSONAS];
+    addLog("LEGACY AUDIO...");
+    const utter = new SpeechSynthesisUtterance(text);
     
-    // Select Voice Logic (Fallback)
-    const voices = window.speechSynthesis.getVoices();
+    utter.pitch = gender === 'female' ? 1.2 : 0.8;
+    utter.rate = persona.fallbackParams.rate;
     
-    // 1. Strict Language Filtering
-    let langCode = 'en-US';
-    if (language === 'Indian English') langCode = 'en-IN';
-    else if (language === 'Hindi') langCode = 'hi';
-    else if (language === 'Tamil') langCode = 'ta';
-    else if (language === 'Telugu') langCode = 'te';
-
-    let langMatches = voices.filter(v => v.lang.toLowerCase().includes(langCode.toLowerCase()));
-
-    // Fallback for Indian English to generic English if specific accent missing
-    if (langMatches.length === 0 && language.includes('English')) {
-       langMatches = voices.filter(v => v.lang.startsWith('en'));
-    }
-
-    // 2. Strict Gender Filtering (Heuristic based on Name)
-    const isFemaleTarget = voiceVariant.includes('Female');
-    
-    let selectedVoice = langMatches.find(v => {
-       const n = v.name.toLowerCase();
-       if (isFemaleTarget) {
-         return n.includes('female') || n.includes('woman') || n.includes('samantha') || n.includes('zira') || n.includes('google');
-       } else {
-         return n.includes('male') || n.includes('man') || n.includes('david') || n.includes('daniel') || n.includes('rishi');
-       }
-    });
-
-    // 3. Last Resort
-    if (!selectedVoice && langMatches.length > 0) selectedVoice = langMatches[0];
-    
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    } else {
-      console.warn(`No voice found for ${language} - ${isFemaleTarget ? 'Female' : 'Male'}`);
-    }
-    
-    // Adjust Pitch/Rate for "Persona" - REFINED for Naturalness
-    if (voiceVariant.includes('Female (Pro)')) { 
-        utterance.rate = 1.0; 
-        utterance.pitch = 1.0; 
-    }
-    else if (voiceVariant.includes('Female (Calm)')) { 
-        utterance.rate = 0.9; 
-        utterance.pitch = 0.95; 
-    }
-    else if (voiceVariant.includes('Female (Enthusiastic)')) { 
-        utterance.rate = 1.1; 
-        utterance.pitch = 1.05; 
-    }
-    else if (voiceVariant.includes('Male (Assertive)')) { 
-        utterance.rate = 0.95; 
-        utterance.pitch = 0.9; 
-    }
-    else if (voiceVariant.includes('Male (Casual)')) { 
-        utterance.rate = 1.0; 
-        utterance.pitch = 1.0; 
-    }
-    else if (voiceVariant.includes('Male (Neutral)')) { 
-        utterance.rate = 1.0; 
-        utterance.pitch = 1.0; 
-    }
-
-    utterance.onstart = () => setIsPlaying(true);
-    utterance.onend = () => setIsPlaying(false);
-    utterance.onerror = () => setIsPlaying(false);
-
-    window.speechSynthesis.speak(utterance);
+    utter.onstart = () => setIsPlaying(true);
+    utter.onend = () => { setIsPlaying(false); addLog("NEURAL IDLE."); };
+    utter.onerror = () => setIsPlaying(false);
+    window.speechSynthesis.speak(utter);
   };
 
-  const handlePlay = () => {
-    if (isPlaying || isBuffering) {
-      stopAudio();
-      return;
+  const handleAction = async () => {
+    if (isPlaying || isBuffering) { stopAudio(); return; }
+    if (mode === 'template') speakWithGenAI(getScript());
+    else {
+      if (!customPrompt.trim()) return;
+      setIsBuffering(true);
+      addLog("FORGING...");
+      const apiKey = process.env.API_KEY;
+      const persona = PERSONAS[personaKey as keyof typeof PERSONAS];
+      try {
+        if (apiKey) {
+          const ai = new GoogleGenAI({ apiKey });
+          const gen = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: `Write a hyper-professional 1-sentence sales pitch for ${industry}. Context: ${customPrompt}. Tone: ${persona.name}. Keep it under 20 words.`
+          });
+          const script = gen.text || "Neural connection established.";
+          setGeneratedScript(script);
+          speakWithGenAI(script);
+        } else {
+          speakWithFallback(customPrompt);
+        }
+      } catch (e) { 
+        setIsBuffering(false);
+        addLog("PROTOCOL ERROR.");
+      }
     }
-    const text = getScript();
-    
-    // Try High-Quality GenAI first
-    speakWithGenAI(text);
   };
-
-  // Initial Voice Load for Fallback
-  useEffect(() => {
-    const loadVoices = () => {
-      const v = window.speechSynthesis.getVoices();
-      if (v.length) setAvailableVoices(v);
-    };
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    return () => { stopAudio(); };
-  }, []);
 
   return (
-    <div className="container mx-auto px-6 text-center">
-      <div className="mb-12">
-        <h2 className="text-3xl md:text-5xl font-heading font-bold text-brand-900 dark:text-white mb-4">
-          Audition Your <span className="text-accent-500">AI Employee</span>
-        </h2>
-        <p className="text-gray-600 dark:text-gray-200 max-w-2xl mx-auto">
-          Experience ultra-realistic neural voice agents. Select a persona and hear them speak instantly.
-        </p>
+    <div id="voice-studio" className="relative bg-white/80 dark:bg-slate-900/80 backdrop-blur-3xl rounded-[3rem] p-4 md:p-8 border-2 border-white/50 dark:border-white/10 shadow-[0_30px_100px_rgba(0,0,0,0.1)] flex flex-col gap-6 h-full transition-all">
+      
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="w-10 h-10 rounded-xl bg-accent-500 flex items-center justify-center text-white shadow-lg shadow-accent-500/20">
+              <i className="fas fa-brain animate-pulse"></i>
+            </div>
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
+          </div>
+          <div>
+            <h3 className="text-xs font-black text-brand-900 dark:text-white uppercase tracking-[0.3em]">Vocal Engine</h3>
+            <p className="text-[8px] font-bold text-accent-600 dark:text-accent-400 uppercase tracking-widest">NXT-Core-Alpha</p>
+          </div>
+        </div>
+        
+        <div className="bg-gray-100 dark:bg-slate-950 p-1 rounded-xl flex border border-gray-200 dark:border-slate-700 shadow-inner">
+          {['template', 'custom'].map(m => (
+            <button 
+              key={m}
+              onClick={() => { setMode(m as any); stopAudio(); }}
+              className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${mode === m ? 'bg-white dark:bg-slate-800 text-brand-900 dark:text-accent-400 shadow-sm border border-gray-200 dark:border-slate-700' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="max-w-5xl mx-auto glass-light dark:glass-dark rounded-[2.5rem] p-6 md:p-10 shadow-2xl border border-white/20 relative overflow-hidden group">
+      <div className="flex flex-col lg:flex-row gap-6 flex-1">
         
-        {/* Background Glow */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-accent-500/10 rounded-full blur-[100px] pointer-events-none transition-opacity duration-1000 group-hover:bg-accent-500/20"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-brand-900/10 dark:bg-brand-500/10 rounded-full blur-[80px] pointer-events-none"></div>
-
-        <div className="relative z-10 flex flex-col gap-10">
-          
-          {/* Controls */}
-          <div className="flex flex-col gap-8">
-            
-            {/* Industry Selection */}
-            <div className="space-y-4 text-left">
-              <label className="text-xs font-bold text-brand-900/60 dark:text-gray-400 uppercase tracking-widest pl-1">
-                <i className="fas fa-building mr-2"></i>Select Industry
-              </label>
-              <div className="flex flex-wrap gap-3">
-                {INDUSTRIES.map(ind => (
-                  <button
-                    key={ind}
-                    onClick={() => setIndustry(ind)}
-                    className={`px-6 py-3 rounded-xl text-sm font-bold tracking-wide transition-all duration-300 border flex items-center gap-2
-                    ${industry === ind 
-                      ? 'bg-brand-900 dark:bg-accent-500 text-white dark:text-brand-950 border-transparent shadow-lg shadow-brand-900/20 dark:shadow-accent-500/30 scale-105 z-10 ring-2 ring-offset-2 ring-transparent dark:ring-offset-slate-900' 
-                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-600 hover:border-accent-400 dark:hover:border-accent-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:shadow-md hover:-translate-y-0.5'}`}
+        <div className="lg:w-1/2 flex flex-col gap-4">
+          <div className="bg-gray-50/50 dark:bg-slate-950/40 rounded-[2rem] p-6 border border-gray-100 dark:border-white/5 flex flex-col gap-5">
+            {mode === 'template' ? (
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center px-1">
+                    <label className="text-[9px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Industry Matrix</label>
+                    <i className="fas fa-microchip text-[10px] text-accent-500/50"></i>
+                  </div>
+                  <select 
+                    value={industry} 
+                    onChange={(e) => setIndustry(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-xs font-bold text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/20 transition-all appearance-none"
                   >
-                    {ind}
-                    {industry === ind && <i className="fas fa-check-circle text-xs ml-1 opacity-80"></i>}
+                    {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center px-1">
+                    <label className="text-[9px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Linguistic Node</label>
+                    <i className="fas fa-globe text-[10px] text-accent-500/50"></i>
+                  </div>
+                  <select 
+                    value={language} 
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-xs font-bold text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/20 transition-all appearance-none"
+                  >
+                    {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5 flex-1 flex flex-col">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-[9px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Logic Forge</label>
+                  <i className="fas fa-terminal text-[10px] text-accent-500/50"></i>
+                </div>
+                <textarea 
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  placeholder="Define neural logic or direct script..."
+                  className="w-full flex-1 min-h-[100px] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-4 text-xs font-bold text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/20 transition-all resize-none shadow-inner"
+                />
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex justify-between items-center px-1">
+                <label className="text-[9px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Voice Signature</label>
+                <div className="flex bg-gray-100 dark:bg-slate-800 p-1 rounded-xl border border-gray-200 dark:border-slate-700">
+                  <button 
+                    onClick={() => setGender('female')}
+                    className={`px-3 py-1 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all ${gender === 'female' ? 'bg-brand-900 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    Female
+                  </button>
+                  <button 
+                    onClick={() => setGender('male')}
+                    className={`px-3 py-1 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all ${gender === 'male' ? 'bg-brand-900 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    Male
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(PERSONAS).map(([key, v]) => (
+                  <button 
+                    key={key}
+                    onClick={() => setPersonaKey(key)}
+                    className={`relative p-3 rounded-2xl text-[9px] font-black border transition-all flex flex-col items-start gap-1 group/voice ${personaKey === key ? 'bg-brand-900 border-brand-900 text-white shadow-xl shadow-brand-900/20' : 'bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-800 text-gray-500 hover:border-accent-500/30'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                        <i className={`fas ${v.icon} ${personaKey === key ? 'text-accent-400' : 'text-gray-300'}`}></i>
+                        <span>{v.name}</span>
+                    </div>
+                    {personaKey === key && <div className="absolute right-3 top-3 w-1.5 h-1.5 bg-accent-400 rounded-full animate-pulse"></div>}
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Language Selection */}
-            <div className="space-y-4 text-left">
-              <label className="text-xs font-bold text-brand-900/60 dark:text-gray-400 uppercase tracking-widest pl-1">
-                <i className="fas fa-globe mr-2"></i>Language & Accent
-              </label>
-              <div className="flex flex-wrap gap-3">
-                {LANGUAGES.map(lang => (
-                  <button
-                    key={lang}
-                    onClick={() => setLanguage(lang)}
-                    className={`px-6 py-3 rounded-xl text-sm font-bold tracking-wide transition-all duration-300 border flex items-center gap-2
-                    ${language === lang 
-                      ? 'bg-accent-500 text-white dark:text-brand-950 border-transparent shadow-lg shadow-accent-500/30 scale-105 z-10 ring-2 ring-offset-2 ring-transparent dark:ring-offset-slate-900' 
-                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-600 hover:border-accent-400 dark:hover:border-accent-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:shadow-md hover:-translate-y-0.5'}`}
-                  >
-                    {lang}
-                    {language === lang && <i className="fas fa-check-circle text-xs ml-1 opacity-80"></i>}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Voice Variant Selection - Search Removed */}
-            <div className="space-y-4 text-left">
-              <label className="text-xs font-bold text-brand-900/60 dark:text-gray-400 uppercase tracking-widest pl-1">
-                <i className="fas fa-microphone-alt mr-2"></i>Voice Persona
-              </label>
-
-              <div className="flex flex-wrap gap-3">
-                {VOICES.map(voice => (
-                  <button
-                    key={voice}
-                    onClick={() => setVoiceVariant(voice)}
-                    className={`px-6 py-3 rounded-xl text-sm font-bold tracking-wide transition-all duration-300 border flex items-center gap-2
-                    ${voiceVariant === voice 
-                      ? 'bg-brand-800 dark:bg-white text-white dark:text-brand-900 border-transparent shadow-lg scale-105 z-10 ring-2 ring-offset-2 ring-transparent dark:ring-offset-slate-900' 
-                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-slate-600 hover:border-accent-400 dark:hover:border-accent-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:shadow-md hover:-translate-y-0.5'}`}
-                  >
-                    <i className={`fas ${voice.includes('Female') ? 'fa-venus' : 'fa-mars'} opacity-70`}></i>
-                    {voice}
-                    {voiceVariant === voice && <i className="fas fa-check-circle text-xs ml-1 opacity-80"></i>}
-                  </button>
-                ))}
-              </div>
-            </div>
-
           </div>
 
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-600 to-transparent"></div>
+          <div className="bg-slate-950 rounded-2xl p-4 font-mono text-[8px] text-accent-500/80 overflow-hidden border border-white/5 h-12 flex items-center justify-between">
+             <div className="flex gap-2">
+                <span className="w-1.5 h-1.5 bg-accent-500 rounded-full animate-ping"></span>
+                {statusLogs.map((log, idx) => <span key={idx} className="whitespace-nowrap overflow-hidden text-ellipsis">{log}</span>)}
+             </div>
+          </div>
+        </div>
 
-          {/* Visualizer & Play Action */}
-          <div className="flex flex-col items-center justify-center space-y-8 min-h-[160px]">
-            
-            {/* Real-Time Frequency Visualizer */}
-            <div 
-              ref={visualizerRef}
-              className="h-32 flex items-center justify-center gap-1.5 w-full max-w-2xl px-4"
+        <div className="lg:w-1/2 relative rounded-[2.5rem] bg-gray-50/50 dark:bg-slate-950/50 border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col items-center justify-center p-8 min-h-[400px] group/hud">
+          <div className="absolute inset-0 pointer-events-none opacity-5 dark:opacity-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]"></div>
+          
+          <div className="absolute inset-0 pointer-events-none">
+             <canvas ref={canvasRef} className="w-full h-full opacity-60 group-hover/hud:opacity-100 transition-opacity duration-1000" />
+          </div>
+
+          <div className="relative z-10 flex flex-col items-center justify-center h-full w-full gap-8">
+            <button 
+              onClick={handleAction}
+              disabled={isBuffering}
+              className={`relative w-28 h-28 rounded-full flex flex-col items-center justify-center transition-all duration-700 transform hover:scale-110 active:scale-95 group/main-node
+              ${isPlaying || isBuffering 
+                ? 'bg-white dark:bg-slate-800 border-2 border-accent-400 shadow-[0_0_60px_rgba(34,211,238,0.4)]' 
+                : 'bg-brand-900 dark:bg-slate-800 border-2 border-transparent shadow-2xl shadow-brand-900/30'}`}
             >
-              {[...Array(48)].map((_, i) => (
-                <div 
-                  key={i} 
-                  className="w-1.5 rounded-full transition-all duration-75"
-                  style={{ height: '6px', opacity: 0.4 }}
-                ></div>
-              ))}
-            </div>
+              <div className={`text-4xl transition-all duration-700 ${isPlaying || isBuffering ? 'text-accent-500 rotate-180' : 'text-white'}`}>
+                 {isBuffering ? <i className="fas fa-circle-notch fa-spin"></i> : isPlaying ? <i className="fas fa-broadcast-tower"></i> : <i className="fas fa-play"></i>}
+              </div>
+              
+              {(isPlaying || isBuffering) && (
+                <div className="absolute inset-[-10px] border-2 border-dashed border-accent-500/30 rounded-full animate-[spin_10s_linear_infinite]"></div>
+              )}
+            </button>
 
-            <div className="relative group/play">
-               {/* Pulse Ring */}
-               {(isPlaying || isBuffering) && (
-                  <div className="absolute inset-0 rounded-full bg-accent-500 animate-ping opacity-20"></div>
-               )}
-               
-               <button 
-                onClick={handlePlay}
-                disabled={isBuffering}
-                className={`
-                  relative z-10 w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-3xl transition-all duration-300 transform hover:scale-105 shadow-2xl border-4
-                  ${isPlaying || isBuffering
-                    ? 'bg-white dark:bg-slate-900 border-red-500 text-red-500 shadow-red-500/20' 
-                    : 'bg-gradient-to-br from-brand-900 to-brand-800 dark:from-white dark:to-gray-200 border-transparent text-white dark:text-brand-900 shadow-brand-900/30'}
-                `}
-              >
-                {isBuffering ? (
-                   <i className="fas fa-circle-notch fa-spin"></i>
-                ) : (
-                   <i className={`fas ${isPlaying ? 'fa-stop' : 'fa-play pl-1.5'}`}></i>
-                )}
-              </button>
-            </div>
-            
-            <div className="space-y-2">
-               <p className={`text-lg font-bold transition-colors ${isPlaying ? 'text-accent-500' : 'text-gray-800 dark:text-white'}`}>
-                  {isBuffering ? 'Generating Audio...' : isPlaying ? 'Speaking...' : 'Click to Audit'}
-               </p>
-               <div className="text-xs text-gray-500 dark:text-gray-300 font-medium tracking-wide flex items-center justify-center gap-2">
-                  <span className="bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-gray-200 dark:border-slate-700">{industry}</span>
-                  <span>•</span>
-                  <span className="bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-gray-200 dark:border-slate-700">{language}</span>
-                  <span className="hidden md:inline">•</span>
-                  <span className="hidden md:inline text-accent-500 text-[10px] uppercase border border-accent-500/30 px-1.5 py-0.5 rounded">Powered by Gemini 2.5</span>
+            <div className={`transition-all duration-700 px-6 transform ${isPlaying ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+               <div className="bg-white/95 dark:bg-slate-800/90 backdrop-blur-xl border border-gray-100 dark:border-white/10 rounded-2xl p-5 shadow-2xl max-w-[240px] text-center relative">
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-accent-500 rounded-full shadow-[0_0_10px_rgba(34,211,238,0.5)]"></div>
+                  <p className="text-[10px] text-gray-800 dark:text-gray-100 font-bold leading-relaxed italic">
+                     "{isPlaying ? (mode === 'template' ? getScript() : generatedScript) : ''}"
+                  </p>
                </div>
             </div>
-
           </div>
+          
+          <div className="absolute top-6 left-6 text-[7px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest border-l border-t border-gray-200 dark:border-slate-800 pt-1 pl-1">Data_In: {isPlaying ? 'Streaming' : 'Null'}</div>
+          <div className="absolute bottom-6 right-6 text-[7px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest border-r border-b border-gray-200 dark:border-slate-800 pb-1 pr-1">Buffer: {isBuffering ? 'Syncing' : 'Ready'}</div>
         </div>
       </div>
     </div>

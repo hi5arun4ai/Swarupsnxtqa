@@ -5,11 +5,13 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: true,
+    // When deploying to Cloudflare Pages, we want to ensure the build doesn't fail on small type errors
+    // since we are using 'vite build' which does a transpile-only build by default if tsc is not invoked.
   },
-  // Ensure env vars (like API_KEY) are loaded if they are prefixed with VITE_
-  // Note: For server-side process.env.API_KEY, you might need replacement or use VITE_API_KEY pattern
   define: {
+    // This allows the client-side code to access process.env.API_KEY
+    // You MUST set the API_KEY environment variable in Cloudflare Pages settings.
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY)
   }
 });
