@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Logo from './Logo.tsx';
 
 interface NavbarProps {
   isDarkMode: boolean;
@@ -8,7 +9,6 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [logoError, setLogoError] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -49,7 +49,7 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme }) => {
     }
   };
 
-  const tooltipClass = "absolute top-[125%] left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-all duration-300 transform translate-y-[-5px] group-hover:translate-y-0 group-focus-visible:translate-y-0 pointer-events-none whitespace-nowrap shadow-xl z-50 before:content-[''] before:absolute before:bottom-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-b-gray-900 dark:before:border-b-gray-100";
+  const tooltipClass = "absolute top-[125%] left-1/2 -translate-x-1/2 px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black uppercase tracking-wider rounded-lg opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-all duration-300 transform translate-y-[-5px] group-hover:translate-y-0 group-focus-visible:translate-y-0 pointer-events-none whitespace-nowrap shadow-xl z-50 before:content-[''] before:absolute before:bottom-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-b-gray-900 dark:before:border-b-gray-100";
 
   return (
     <nav 
@@ -66,19 +66,8 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme }) => {
           className="cursor-pointer flex items-center group focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 rounded-lg"
           aria-label="Swarups NXT Home"
         >
-          <div className="flex items-center h-12 md:h-14">
-            {!logoError ? (
-              <img 
-                src="img/logo.svg" 
-                alt="Swarups NXT" 
-                className="h-full w-auto object-contain transition-all duration-300 group-hover:scale-105 dark:brightness-0 dark:invert"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <span className="text-xl font-heading font-extrabold text-brand-900 dark:text-white transition-all duration-300 group-hover:scale-105">
-                Swarups<span className="text-accent-500">NXT</span>
-              </span>
-            )}
+          <div className="flex items-center h-10 md:h-12 lg:h-14">
+            <Logo className="h-full w-auto transition-all duration-500 group-hover:scale-105" />
           </div>
         </a>
 
@@ -100,10 +89,11 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme }) => {
             onClick={toggleTheme}
             className="group relative p-2 rounded-full hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-brand-900 dark:text-yellow-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
             aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            aria-describedby="theme-tooltip"
           >
             {isDarkMode ? <i className="fas fa-sun"></i> : <i className="fas fa-moon"></i>}
-            <span role="tooltip" className={tooltipClass}>
-              {isDarkMode ? "Light Mode" : "Dark Mode"}
+            <span id="theme-tooltip" role="tooltip" className={tooltipClass}>
+              {isDarkMode ? "Switch to Light Theme" : "Switch to Dark Theme"}
             </span>
           </button>
           
@@ -112,9 +102,13 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme }) => {
             target="_blank" 
             rel="noopener noreferrer"
             className="group relative flex items-center gap-2 bg-brand-900 dark:bg-accent-500 text-white dark:text-brand-950 px-6 py-2.5 rounded-xl font-bold transition-all hover:scale-105 shadow-lg shadow-brand-900/10 dark:shadow-accent-500/20 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent-500"
+            aria-describedby="whatsapp-tooltip"
           >
             <i className="fab fa-whatsapp text-lg"></i>
             <span>Talk to Expert</span>
+            <span id="whatsapp-tooltip" role="tooltip" className={tooltipClass}>
+              Open WhatsApp for expert consultation
+            </span>
           </a>
         </div>
 

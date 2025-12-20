@@ -33,7 +33,7 @@ const Industries: React.FC = () => {
       title: "Healthcare",
       tagline: "Secure and private patient scheduling.",
       desc: "Manage high-volume appointment requests without the overhead. Our healthcare-tuned agents provide pre-consultation screening, appointment reminders, and follow-up care instructions in a compassionate, human-like voice while maintaining total data privacy.",
-      icon: "fa-stethascope",
+      icon: "fa-stethoscope",
       image: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=800&auto=format&fit=crop",
       color: "from-emerald-500 to-teal-600",
       faq: {
@@ -45,7 +45,7 @@ const Industries: React.FC = () => {
       title: "E-Commerce",
       tagline: "Recover carts and track orders 24/7.",
       desc: "Transform your support center from a cost to a revenue generator. AI agents can reach out to abandoned carts with personalized offers, handle returns, and update customers on shipping status across voice and WhatsApp.",
-      icon: "fa-bags-shopping",
+      icon: "fa-cart-shopping",
       image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?q=80&w=800&auto=format&fit=crop",
       color: "from-purple-600 to-fuchsia-500",
       faq: {
@@ -184,15 +184,6 @@ const Industries: React.FC = () => {
                                 </p>
                              </div>
                           </div>
-                       </div>
-
-                       <div className="flex gap-4">
-                          <button className="flex-1 py-4 bg-brand-900 dark:bg-accent-600 text-white dark:text-brand-900 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:shadow-accent-500/20 transition-all hover:-translate-y-1">
-                             Download Case Study
-                          </button>
-                          <button className="flex-1 py-4 bg-white dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-700 text-brand-900 dark:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-accent-500 transition-all">
-                             View Integrations
-                          </button>
                        </div>
                     </div>
                  </div>

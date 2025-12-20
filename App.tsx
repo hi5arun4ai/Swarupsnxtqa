@@ -13,9 +13,9 @@ import Contact from './components/Contact.tsx';
 import Footer from './components/Footer.tsx';
 import DemoModal from './components/DemoModal.tsx';
 import FAQ from './components/FAQ.tsx';
-import GuidedTour from './components/GuidedTour.tsx';
 import PrivacyProtocol from './components/PrivacyProtocol.tsx';
 import SecurityTerms from './components/SecurityTerms.tsx';
+import ChatWidget from './components/ChatWidget.tsx';
 
 const App: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -154,8 +154,8 @@ const App: React.FC = () => {
       <PrivacyProtocol isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
       <SecurityTerms isOpen={isSecurityOpen} onClose={() => setIsSecurityOpen(false)} />
       
-      {/* Interactive Tour Component */}
-      <GuidedTour />
+      {/* Floating AI Chat Widget */}
+      <ChatWidget />
     </div>
   );
 };

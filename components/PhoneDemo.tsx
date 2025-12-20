@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { GoogleGenAI } from "@google/genai";
 
 interface PhoneDemoProps {
   openModal: () => void;
@@ -11,210 +12,209 @@ interface Message {
   options?: { label: string; action: string }[];
 }
 
+const SYSTEM_INSTRUCTION = `You are the official Swarupsnxt Chatbot. Your goal is to provide helpful, professional, and friendly information about Swarupsnxt's services, mission, and general inquiries.
+
+## Tone and Style
+- Professional, innovative, and customer-centric.
+- Use clear language. Format with bullet points if the answer is long.
+- Keep responses concise but complete.`;
+
+const DEFAULT_OPTIONS = [
+  { label: "Our Services 🤖", action: "services" },
+  { label: "Boost Sales 🚀", action: "boost" },
+  { label: "See USP 💎", action: "usp" },
+  { label: "Book a Demo 📅", action: "book" }
+];
+
 const PhoneDemo: React.FC<PhoneDemoProps> = ({ openModal }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const [isInteracting, setIsInteracting] = useState(false);
+  
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatHistoryRef = useRef<{ role: string; parts: { text: string }[] }[]>([]);
 
   useEffect(() => {
-    startConversation();
+    startConversation("Hi! I'm the official Swarupsnxt Assistant. I can help you understand how our AI Digital Employees can scale your business.");
+    
+    const handleExternalInitiate = () => {
+      setIsFocused(true);
+      const timer = setTimeout(() => setIsFocused(false), 3000);
+      return () => clearTimeout(timer);
+    };
+    
+    window.addEventListener('nxt-initiate-chat', handleExternalInitiate);
+    return () => window.removeEventListener('nxt-initiate-chat', handleExternalInitiate);
   }, []);
 
+  // Optimized Scroll Handler using scrollIntoView
   useEffect(() => {
-    if (chatContainerRef.current) {
-      const container = chatContainerRef.current;
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
+    const scrollToBottom = () => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: messages.length <= 1 ? "auto" : "smooth",
+          block: "nearest"
+        });
+      }
+    };
+
+    // Small timeout ensures the DOM has updated and calculated new element heights
+    const timer = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timer);
   }, [messages, isTyping]);
 
-  const startConversation = () => {
+  const startConversation = (greetingText: string) => {
     setMessages([]);
     setIsTyping(true);
+    chatHistoryRef.current = [];
+    
     setTimeout(() => {
-      setMessages([
-        {
-          id: 1,
-          text: "Hi! I'm SwarupBot. I'm your new AI growth partner. What's our goal today?",
-          sender: 'bot',
-          options: [
-            { label: "Boost Sales 📈", action: "sales" },
-            { label: "See USP 🌟", action: "usp" },
-            { label: "Lower Costs 💸", action: "costs" },
-            { label: "24/7 Support 🛠️", action: "support" }
-          ]
-        }
-      ]);
+      const firstMsg: Message = {
+        id: Date.now(),
+        text: greetingText,
+        sender: 'bot',
+        options: DEFAULT_OPTIONS
+      };
+      setMessages([firstMsg]);
+      chatHistoryRef.current = [{ role: "model", parts: [{ text: firstMsg.text }] }];
       setIsTyping(false);
-    }, 1000);
+    }, 400); 
   };
 
-  const handleAction = (action: string, label: string) => {
+  const getGeminiResponse = async (userText: string) => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return "I'm in standalone mode. Please configure the system API key.";
+
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      chatHistoryRef.current.push({ role: "user", parts: [{ text: userText }] });
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: chatHistoryRef.current,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          maxOutputTokens: 1000,
+          temperature: 0.7,
+          thinkingConfig: { thinkingBudget: 0 }
+        }
+      });
+
+      const textParts = response.candidates?.[0]?.content?.parts
+        ?.filter(part => 'text' in part)
+        .map(part => part.text);
+      
+      const reply = textParts?.join('') || "I'm analyzing your request. How else can I help you?";
+      chatHistoryRef.current.push({ role: "model", parts: [{ text: reply }] });
+      return reply;
+    } catch (e) {
+      return "Encountered a signal interruption. Contact hello@swarupsnxt.com for support.";
+    }
+  };
+
+  const handleAction = async (action: string, label: string) => {
     if (action === 'book') {
       openModal();
       return;
     }
-
     setMessages(prev => [...prev, { id: Date.now(), text: label, sender: 'user' }]);
     setIsTyping(true);
-
-    setTimeout(() => {
-      let botResponse: Message;
-
-      switch (action) {
-        case 'sales':
-          botResponse = {
-            id: Date.now() + 1,
-            text: "I qualify every lead instantly. By engaging visitors in 200ms, I prevent 'lead leakage' and book qualified meetings directly to your calendar.",
-            sender: 'bot'
-          };
-          break;
-        case 'usp':
-          botResponse = {
-            id: Date.now() + 1,
-            text: "Unlike basic bots, I'm powered by native neural voice intelligence. I understand sentiment, context, and complex business data with 99.8% accuracy.",
-            sender: 'bot'
-          };
-          break;
-        case 'costs':
-          botResponse = {
-            id: Date.now() + 1,
-            text: "I cost roughly 10% of a full-time human agent and I never sleep, take breaks, or need benefits. I'm pure efficiency for your bottom line.",
-            sender: 'bot'
-          };
-          break;
-        case 'support':
-          botResponse = {
-            id: Date.now() + 1,
-            text: "I can handle thousands of Tier 1 queries simultaneously across web, WhatsApp, and phone. Your human team only gets the complex stuff.",
-            sender: 'bot'
-          };
-          break;
-        default:
-          botResponse = {
-            id: Date.now() + 1,
-            text: "That sounds interesting! Want to see how I can integrate with your specific business model?",
-            sender: 'bot'
-          };
-      }
-
-      setMessages(prev => [...prev, botResponse]);
-      
-      setTimeout(() => {
-        setMessages(prev => [...prev, {
-            id: Date.now() + 2,
-            text: "Should we get a personalized demo ready for you?",
-            sender: 'bot',
-            options: [
-                { label: "Yes, Book Demo 📅", action: "book" },
-                { label: "Tell me more first", action: "usp" }
-            ]
-        }]);
-        setIsTyping(false);
-      }, 1500);
-
-    }, 1500);
+    const botReply = await getGeminiResponse(label);
+    setMessages(prev => [...prev, {
+      id: Date.now() + 1,
+      text: botReply,
+      sender: 'bot',
+      options: DEFAULT_OPTIONS.filter(opt => opt.action !== action)
+    }]);
+    setIsTyping(false);
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim()) return;
-
+    if (!inputValue.trim() || isTyping) return;
     const text = inputValue.trim();
     setInputValue("");
-    
     setMessages(prev => [...prev, { id: Date.now(), text: text, sender: 'user' }]);
     setIsTyping(true);
-
-    setTimeout(() => {
-        let replyText = "";
-        let options: { label: string; action: string }[] | undefined = undefined;
-        const lowerText = text.toLowerCase();
-
-        if (lowerText.includes("price") || lowerText.includes("cost")) {
-            replyText = "Our pricing is flexible based on volume. Typically, we save companies 60-80% on support overhead.";
-            options = [{ label: "Check ROI 💰", action: "sales" }];
-        } else if (lowerText.includes("demo") || lowerText.includes("book")) {
-            replyText = "I can definitely help with that. Let's find a time for your team.";
-            options = [{ label: "Open Calendar 📅", action: "book" }];
-        } else {
-            replyText = "Understood. I'm fine-tuned to help you scale. Would you like to see our industry-specific use cases?";
-            options = [
-              { label: "See USP 🌟", action: "usp" },
-              { label: "Book Demo 📅", action: "book" }
-            ];
-        }
-
-        setMessages(prev => [...prev, {
-            id: Date.now() + 1,
-            text: replyText,
-            sender: 'bot',
-            options: options
-        }]);
-        setIsTyping(false);
-    }, 1200);
+    const botReply = await getGeminiResponse(text);
+    setMessages(prev => [...prev, {
+      id: Date.now() + 1,
+      text: botReply,
+      sender: 'bot'
+    }]);
+    setIsTyping(false);
   };
 
-  return (
-    <div id="chat-bot" className="flex flex-col items-center xl:items-end justify-center w-full">
-      <div className="relative group w-full flex justify-center xl:justify-end">
-        
-        {/* Ambient Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[110%] h-[110%] bg-accent-500/5 rounded-full blur-[80px] pointer-events-none -z-10 animate-pulse"></div>
+  const disableAnimations = isInteracting || isTyping || inputValue.length > 0;
 
-        {/* Phone Body with pulse animation */}
-        <div className="relative w-[280px] sm:w-[320px] h-[580px] sm:h-[640px] bg-gray-950 rounded-[3rem] border-[8px] border-gray-900 shadow-[0_40px_100px_rgba(0,0,0,0.5)] lg:[transform:perspective(1500px)_rotateY(-12deg)_rotateX(4deg)] overflow-hidden transition-all duration-700 hover:[transform:perspective(1500px)_rotateY(-5deg)_rotateX(2deg)] ring-1 ring-white/10">
-          
-          {/* Dynamic Island Overlay */}
-          <div className="absolute top-0 inset-x-0 h-7 bg-black rounded-b-2xl z-30 w-28 sm:w-32 mx-auto flex items-center justify-center gap-1.5 shadow-sm">
+  return (
+    <div className="flex flex-col items-center xl:items-end justify-center w-full">
+      <div className="relative group w-full flex justify-center xl:justify-end">
+        {/* Ambient Glow */}
+        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[110%] h-[110%] rounded-full blur-[80px] pointer-events-none -z-10 transition-opacity duration-1000 ${isFocused && !disableAnimations ? 'opacity-100 bg-accent-500/30' : 'opacity-20 bg-accent-500/5'}`}></div>
+
+        <div 
+          id="chat-bot"
+          style={{ 
+            backfaceVisibility: 'hidden', 
+            WebkitBackfaceVisibility: 'hidden',
+            transformStyle: 'preserve-3d' 
+          }}
+          className={`relative w-[280px] sm:w-[320px] h-[580px] sm:h-[640px] bg-gray-950 rounded-[3rem] border-[8px] border-gray-900 shadow-[0_40px_100px_rgba(0,0,0,0.5)] overflow-hidden ring-1 ring-white/10 will-change-transform transition-[transform,shadow,ring] duration-700
+          ${!disableAnimations 
+            ? 'lg:[transform:perspective(1500px)_rotateY(-12deg)_rotateX(4deg)] hover:[transform:perspective(1500px)_rotateY(-5deg)_rotateX(2deg)] hover:animate-soft-pulse' 
+            : 'lg:[transform:perspective(1500px)_rotateY(0)_rotateX(0)] shadow-2xl scale-100'
+          }
+          ${isFocused && !disableAnimations ? 'ring-4 ring-accent-500 ring-offset-4 dark:ring-offset-slate-900 animate-focus-pulse' : ''}`}
+        >
+          {/* Hardware Notch */}
+          <div className="absolute top-0 inset-x-0 h-7 bg-black rounded-b-2xl z-30 w-28 sm:w-32 mx-auto flex items-center justify-center gap-1.5">
               <div className="w-8 sm:w-10 h-1 sm:h-1.5 bg-gray-800 rounded-full"></div>
               <div className="w-1.5 h-1.5 bg-blue-900/40 rounded-full"></div>
           </div>
 
-          {/* Internal Screen Flow */}
           <div className="w-full h-full flex flex-col pt-8 bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
-            
-            {/* Chat Header */}
-            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md p-4 shadow-sm flex items-center gap-3 border-b border-gray-200 dark:border-slate-700 z-10">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand-900 flex items-center justify-center text-white font-black text-[10px] sm:text-xs shadow-lg">SB</div>
+            {/* Header */}
+            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md p-4 shadow-sm flex items-center gap-3 border-b border-gray-200 dark:border-slate-700 z-10 shrink-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand-900 flex items-center justify-center text-white font-black text-[10px] sm:text-xs">NX</div>
               <div>
-                <h3 className="font-black text-gray-800 dark:text-white text-[10px] sm:text-xs uppercase tracking-wider">Neural Agent</h3>
+                <h3 className="font-black text-gray-800 dark:text-white text-[10px] sm:text-xs uppercase tracking-wider">Swarupsnxt Bot</h3>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                  <p className="text-[8px] sm:text-[9px] text-accent-600 dark:text-accent-400 font-black uppercase tracking-[0.2em]">Online</p>
+                  <p className="text-[8px] sm:text-[9px] text-accent-600 dark:text-accent-400 font-black uppercase tracking-widest">Online</p>
                 </div>
               </div>
             </div>
 
-            {/* Messages Container */}
+            {/* Chat Messages Container */}
             <div 
-              ref={chatContainerRef}
-              className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth custom-scrollbar bg-gray-50/50 dark:bg-slate-900/50"
+              ref={scrollContainerRef}
+              className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50 dark:bg-slate-900/50 custom-scrollbar overscroll-contain flex flex-col min-h-0"
+              style={{ scrollBehavior: 'smooth' }}
             >
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} animate-fade-in-up`}>
-                  <div className={`max-w-[85%] p-3.5 rounded-2xl text-[11px] sm:text-[13px] leading-relaxed shadow-[0_4px_12px_rgba(0,0,0,0.05)] border transition-all hover:shadow-lg hover:border-accent-500/30 ${
+              {messages.map((msg, index) => (
+                <div key={msg.id} className={`flex flex-col flex-shrink-0 ${msg.sender === 'user' ? 'items-end' : 'items-start'} ${index === messages.length - 1 ? 'animate-fade-in-up' : ''} w-full`}>
+                  <div className={`max-w-[92%] p-3.5 sm:p-4 rounded-2xl text-[12px] sm:text-[14px] leading-relaxed shadow-md border-2 transition-all duration-300 h-auto min-h-fit break-words whitespace-pre-wrap ${
                     msg.sender === 'user' 
-                      ? 'bg-brand-900 text-white rounded-br-none border-transparent' 
-                      : 'bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 rounded-bl-none border-gray-100 dark:border-slate-700'
-                  }`}>
+                      ? 'bg-brand-900 text-white rounded-br-none border-transparent ml-auto' 
+                      : 'bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 rounded-bl-none border-gray-100 dark:border-slate-700 mr-auto'
+                  } ${!isTyping ? 'hover:shadow-xl hover:shadow-accent-500/10 hover:border-accent-500/30 hover:scale-[1.01]' : ''}`}>
                     {msg.text}
                   </div>
                   
                   {msg.options && (
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2 w-full justify-start pb-2 flex-shrink-0">
                       {msg.options.map((opt, idx) => (
                         <button
                           key={idx}
                           onClick={() => handleAction(opt.action, opt.label)}
-                          className={`text-[9px] sm:text-[10px] px-3 py-2 rounded-xl transition-all font-black uppercase tracking-widest shadow-[0_4px_10px_rgba(0,0,0,0.1)] active:scale-95 border ${
+                          className={`text-[9px] sm:text-[10px] px-3 py-2 rounded-xl transition-all font-black uppercase tracking-widest shadow-md active:scale-95 border-2 ${
                             opt.action === 'book'
-                              ? 'bg-accent-500 border-accent-400 text-white hover:bg-accent-600 hover:shadow-accent-500/20'
-                              : 'bg-white dark:bg-slate-700 text-brand-900 dark:text-accent-400 border-gray-100 dark:border-slate-600 hover:border-accent-500 hover:bg-accent-50/10'
+                              ? 'bg-accent-500 border-accent-400 text-white hover:bg-accent-600'
+                              : 'bg-white dark:bg-slate-700 text-brand-900 dark:text-accent-400 border-gray-100 dark:border-slate-600 hover:border-accent-500'
                           }`}
                         >
                           {opt.label}
@@ -226,37 +226,40 @@ const PhoneDemo: React.FC<PhoneDemoProps> = ({ openModal }) => {
               ))}
               
               {isTyping && (
-                <div className="flex items-start">
-                  <div className="bg-white dark:bg-slate-800 px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center shadow-sm border border-gray-100 dark:border-slate-700">
-                    <span className="w-1 h-1 bg-accent-500 rounded-full animate-bounce"></span>
-                    <span className="w-1 h-1 bg-accent-500 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                    <span className="w-1 h-1 bg-accent-500 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                <div className="flex items-start flex-shrink-0">
+                  <div className="bg-white dark:bg-slate-800 px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center shadow-sm border border-gray-100 dark:border-slate-700 animate-pulse">
+                    <span className="w-1.5 h-1.5 bg-accent-500 rounded-full"></span>
+                    <span className="w-1.5 h-1.5 bg-accent-500 rounded-full opacity-60"></span>
+                    <span className="w-1.5 h-1.5 bg-accent-500 rounded-full opacity-30"></span>
                   </div>
                 </div>
               )}
-              <div ref={messagesEndRef} />
+              
+              {/* Invisible anchor for scroll tracking */}
+              <div ref={messagesEndRef} className="h-2 w-full flex-shrink-0" aria-hidden="true" />
             </div>
 
-            {/* Chat Input Area */}
+            {/* Input Form */}
             <form 
               onSubmit={handleSendMessage}
-              className="p-4 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 pb-8"
+              className="p-4 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 pb-8 shrink-0"
             >
-              <div className="flex items-center gap-2 bg-gray-100 dark:bg-slate-800 px-4 py-2.5 rounded-2xl shadow-inner border border-gray-200/50 dark:border-white/5 focus-within:border-accent-500/50 transition-all">
+              <div className="flex items-center gap-2 bg-gray-100 dark:bg-slate-800 px-4 py-2.5 rounded-2xl border-2 border-gray-200/50 dark:border-white/5 focus-within:border-accent-500/50 transition-all shadow-inner">
                 <input 
                   type="text" 
                   value={inputValue} 
                   onChange={(e) => setInputValue(e.target.value)}
-                  placeholder="Test its logic..."
-                  className="bg-transparent border-none outline-none w-full text-[11px] sm:text-xs text-gray-800 dark:text-white placeholder-gray-400 font-medium"
+                  onFocus={() => setIsInteracting(true)}
+                  onBlur={() => setIsInteracting(false)}
+                  placeholder="Ask me anything..."
+                  className="bg-transparent border-none outline-none w-full text-[12px] text-gray-800 dark:text-white placeholder-gray-400 font-bold"
                 />
-                <button type="submit" disabled={!inputValue.trim()} className="text-accent-500 transition-transform active:scale-90 disabled:opacity-30 p-1">
-                  <i className="fas fa-paper-plane text-sm sm:text-base"></i>
+                <button type="submit" disabled={!inputValue.trim() || isTyping} className="text-accent-500 transition-transform active:scale-90 disabled:opacity-30">
+                  <i className="fas fa-paper-plane text-base"></i>
                 </button>
               </div>
             </form>
 
-            {/* Physical Home Indicator Bar */}
             <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-20 sm:w-28 h-1 bg-gray-300 dark:bg-gray-700 rounded-full z-30"></div>
           </div>
         </div>

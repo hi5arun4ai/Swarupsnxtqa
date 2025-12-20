@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import Logo from './Logo.tsx';
 
 interface FooterProps {
   onOpenPrivacy?: () => void;
@@ -6,8 +7,6 @@ interface FooterProps {
 }
 
 const Footer: React.FC<FooterProps> = ({ onOpenPrivacy, onOpenSecurity }) => {
-  const [logoError, setLogoError] = useState(false);
-
   const handleScrollToTop = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -37,18 +36,7 @@ const Footer: React.FC<FooterProps> = ({ onOpenPrivacy, onOpenSecurity }) => {
               onClick={handleScrollToTop}
               className="inline-flex items-center group h-12 md:h-14 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 rounded-lg p-1"
             >
-              {!logoError ? (
-                <img 
-                  src="img/logo.svg" 
-                  alt="Swarups NXT" 
-                  className="h-full w-auto object-contain transition-all duration-500 group-hover:scale-105 dark:brightness-0 dark:invert"
-                  onError={() => setLogoError(true)}
-                />
-              ) : (
-                <span className="text-2xl font-heading font-black text-brand-900 dark:text-white transition-all duration-300 group-hover:scale-105">
-                  Swarups<span className="text-accent-500">NXT</span>
-                </span>
-              )}
+              <Logo className="h-full w-auto transition-all duration-500 group-hover:scale-105" />
             </a>
             
             <p className="text-gray-600 dark:text-gray-400 text-base leading-relaxed font-medium">

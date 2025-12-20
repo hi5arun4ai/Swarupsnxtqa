@@ -53,6 +53,8 @@
               'float': 'float 3s ease-in-out infinite',
               'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
               'gradient': 'gradient 8s ease infinite',
+              'focus-pulse': 'focusPulse 2s ease-out',
+              'soft-pulse': 'softPulse 4s ease-in-out infinite',
             },
             backgroundSize: { '300%': '300%' },
             keyframes: {
@@ -73,6 +75,15 @@
               gradient: {
                 '0%, 100%': { backgroundPosition: '0% 50%' },
                 '50%': { backgroundPosition: '100% 50%' },
+              },
+              focusPulse: {
+                '0%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(43, 182, 198, 0.4)' },
+                '50%': { transform: 'scale(1.03)', boxShadow: '0 0 50px 20px rgba(43, 182, 198, 0.2)' },
+                '100%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(43, 182, 198, 0)' },
+              },
+              softPulse: {
+                '0%, 100%': { transform: 'scale(1)' },
+                '50%': { transform: 'scale(1.015)' },
               }
             }
           }
@@ -88,6 +99,14 @@
       .glass-light { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
       .glass-dark { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(43, 182, 198, 0.1); }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+      
+      /* Animation Delays */
+      .delay-100 { animation-delay: 100ms; }
+      .delay-200 { animation-delay: 200ms; }
+      .delay-300 { animation-delay: 300ms; }
+      .delay-400 { animation-delay: 400ms; }
+      .delay-500 { animation-delay: 500ms; }
+      .delay-600 { animation-delay: 600ms; }
     </style>
     
     <script type="importmap">
